@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>PAKKAAAN!</title>
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="焼いて、開いて、最高のひと皿。3Dオムライス・シミュレーター">
+<!-- おさいせん：応援ページ（OFUSE など）のURLをここに入れる。空のままならボタンは出ない -->
+<meta name="pk:tip" content="">
+<meta property="og:type" content="website">
+<meta property="og:title" content="PAKKAAAN!">
+<meta property="og:description" content="焼いて、開いて、最高のひと皿。3Dオムライス・シミュレーター">
+<meta property="og:image" content="https://gamemaker-eve.github.io/PAKKAAAN-sns/ogp.png">
+<meta property="og:url" content="https://gamemaker-eve.github.io/PAKKAAAN-sns/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+<script>
+  // 読み込みエラーで画面が真っ白にならないように
+  window.__pkError = function (msg) {
+    var e = document.getElementById('error'), m = document.getElementById('errorMsg');
+    if (!e || !m) return;
+    // 最初に起きた原因を残し、後のエラーは下に追記する
+    m.textContent = m.textContent ? m.textContent + '\n' + msg : msg;
+    e.hidden = false;
+  };
+  // スマホ・タブレット：ブラウザ自体の拡大（ダブルタップ・ピンチ）や長押しメニューを止め、ゲームの操作だけにする
+  (function () {
+    var stop = function (e) { e.preventDefault(); };
+    document.addEventListener('gesturestart', stop, { passive: false });
+    document.addEventListener('gesturechange', stop, { passive: false });
+    document.addEventListener('gestureend', stop, { passive: false });
+    document.addEventListener('dblclick', stop, { passive: false });
+    document.addEventListener('touchmove', function (e) { if (e.touches && e.touches.length > 1) e.preventDefault(); }, { passive: false });
+    document.addEventListener('contextmenu', function (e) { if (!(e.target.closest && e.target.closest('input, textarea, #photoImg'))) e.preventDefault(); });
+  })();
+  window.addEventListener('error', function (ev) {
+    if (window.__pkStarted) return;
+    if (ev.target && ev.target.tagName && ev.target.tagName !== 'SCRIPT') return; // フォントなどは無視
+    var src = ev.target && ev.target.src;
+    window.__pkError(src ? '読み込めなかったファイル：' + src.replace(location.href.replace(/[^/]*$/, ''), '') : '読み込み中にエラーが発生しました：' + (ev.message || '不明なエラー'));
+  }, true);
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="stage3d" aria-label="3D調理画面"></div>
+
+  <!-- 調理中のHUD -->
+  <header id="hud" hidden>
+    <ol id="steps" aria-label="工程"></ol>
+    <div class="hud-tools">
+      <button id="camBtn" class="chip" aria-pressed="false" title="ドラッグで視点を回す（右ドラッグ・2本指でも操作できます）">視点を回す</button>
+      <button id="helpBtn" class="chip" title="遊び方">?</button>
+      <button id="setBtn" class="chip" title="設定">設定</button>
+      <button id="homeBtn" class="chip" title="タイトルへ">タイトル</button>
+    </div>
+  </header>
+  <aside id="panel" hidden>
+    <button id="panelGrip" aria-label="パネルを開閉"><span></span></button>
+    <div id="panelBody"></div>
+  </aside>
+  <div id="hint" hidden></div>
+  <div id="actBar" class="act-bar" hidden>
+    <button id="viewBtn" class="btn view-top">コンロ目線</button>
+    <button id="aPour" class="btn primary">卵液を流す</button>
+    <button id="aSpat" class="btn">へらを置く</button>
+    <button id="aTilt" class="btn" title="押している間、奥へ傾ける">奥へ傾ける</button>
+    <button id="aKnock" class="btn">トントン</button>
+    <button id="aNext" class="btn primary">皿に移す</button>
+  </div>
+  <button id="fabNext" class="btn primary fab-next" hidden></button>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="bigText" aria-live="assertive"></div>
+
+  <!-- タイトル -->
+  <section id="title" class="screen">
+    <div class="title-inner">
+      <h1 class="logo"><span class="logo-main">PAKKAAAN!</span><span class="logo-sub">オムライス・シミュレーター</span></h1>
+      <p class="catch">「焼いて、開いて、最高のひと皿。」</p>
+      <div class="title-btns">
+        <button id="startBtn" class="btn primary big">はじめる</button>
+        <button id="howBtn" class="btn">遊び方</button>
+        <button id="titleSetBtn" class="btn">設定</button>
+      </div>
+      <p id="loadNote" class="small"></p>
+    </div>
+  </section>
+
+  <!-- 遊び方 -->
+  <section id="howto" class="modal" hidden role="dialog" aria-labelledby="howtoTitle">
+    <div class="modal-card">
+      <h2 id="howtoTitle">遊び方</h2>
+      <ol class="how">
+        <li><b>割る</b>　卵を長押しで持ち、縁や机にコンコン → ボウルの上で離して「ぱかっ」。強すぎるとつぶれる</li>
+        <li><b>溶く</b>　ボウルの中をドラッグ</li>
+        <li><b>焼く</b>　つまみで火 → バターを運んで広げる → 卵液を流す → へらで混ぜる → 奥へ傾けてトントンで巻く</li>
+        <li><b>盛る</b>　フライパンを上へドラッグして傾け、ライスへ滑らせる</li>
+        <li><b>切る</b>　端から端へスッと。速さで開き方が変わる</li>
+        <li><b>仕上げ</b>　奥の容器を選んでソース・トッピング → 写真を撮る</li>
+      </ol>
+      <p class="small">カメラ：右ドラッグ／2本指で回転、ホイール／ピンチでズーム</p>
+      <button class="btn primary closeModal">閉じる</button>
+    </div>
+  </section>
+
+  <!-- 設定 -->
+  <section id="settings" class="modal" hidden role="dialog" aria-labelledby="setTitle">
+    <div class="modal-card">
+      <h2 id="setTitle">設定</h2>
+      <label class="row"><span>効果音</span><input type="checkbox" id="optSound"></label>
+      <label class="row"><span>音量</span><input type="range" id="optVol" min="0" max="1" step="0.05"></label>
+      <div class="row"><span>拍手の音</span><span class="snd"><select id="optClap"></select><button type="button" class="chip" id="prevClap" aria-label="拍手の音を試す">▶</button></span></div>
+      <div class="row"><span>カメラの音</span><span class="snd"><select id="optShutter"></select><button type="button" class="chip" id="prevShutter" aria-label="カメラの音を試す">▶</button></span></div>
+      <label class="row"><span>評価の声（えー・おしい！など）</span><span class="snd"><input type="checkbox" id="optVoice"><button type="button" class="chip" id="prevVoice" aria-label="声を試す">▶</button></span></label>
+      <label class="row"><span>画質</span>
+        <select id="optQuality"><option value="auto">自動</option><option value="low">低（軽い）</option><option value="mid">中</option><option value="high">高（きれい）</option></select>
+      </label>
+      <label class="row"><span>操作の感度</span><input type="range" id="optSens" min="0.5" max="2" step="0.1"></label>
+      <label class="row"><span>ヒントを表示</span><input type="checkbox" id="optHints"></label>
+      <p class="small">画質の変更は影の細かさと解像度に反映されます。</p>
+      <button class="btn primary closeModal">閉じる</button>
+    </div>
+  </section>
+
+  <!-- 結果 -->
+  <section id="result" hidden>
+    <div class="result-card">
+      <div class="rank-row">
+        <div id="rank" class="rank">S</div>
+        <div>
+          <div class="total"><span id="total">0</span><small>/100点</small></div>
+          <div id="rankTitle" class="rank-title"></div>
+        </div>
+      </div>
+      <ul id="quips" class="quips" hidden></ul>
+      <button id="photoBtn" class="btn primary photo-cta">📷 写真を撮る</button>
+      <a id="xShareResult" class="btn x-share" href="https://x.com/intent/post" target="_blank" rel="noopener">𝕏 結果をシェア</a>
+      <div id="tipBox" class="tip-box" hidden>
+        <div class="tip-coins" aria-hidden="true"></div>
+        <a id="tipBtn" class="btn tip-btn" href="#" target="_blank" rel="noopener"><span class="tip-ico" aria-hidden="true">⛩</span>おさいせんを入れる</a>
+        <p class="tip-note">おいしかったら、作った人にちょっとだけ応援を。<br>遊ぶのはずっと無料です</p>
+      </div>
+      <div class="kcal"><span class="p-label">カロリー（目安）</span><div><b id="kcalTotal">0</b><small> kcal</small></div><div class="small" id="kcalParts"></div></div>
+      <ul id="scoreList"></ul>
+      <div class="result-btns">
+
+        <button id="againBtn" class="btn">もう一度作る</button>
+        <button id="resetBtn" class="btn">最初からやり直す</button>
+        <button id="toTitleBtn" class="btn">タイトルへ戻る</button>
+      </div>
+      <p class="small">ドラッグで回して完成品を鑑賞できます。</p>
+    </div>
+  </section>
+
+  <!-- 写真モード -->
+  <section id="photo" hidden>
+    <canvas id="photoCanvas" aria-hidden="true"></canvas>
+    <div class="photo-bar">
+      <div class="photo-head">写真に入れる文字を書こう</div>
+      <div class="photo-inputs">
+        <label class="ph-field"><input id="phAuthor" maxlength="16" enterkeyhint="done" placeholder="なまえ" autocomplete="off"><span>作！</span></label>
+        <label class="ph-field"><input id="phTitle" maxlength="20" enterkeyhint="done" placeholder="題名" autocomplete="off"><span>オムライス！</span></label>
+      </div>
+      <div class="photo-actions">
+        <button id="photoBack" class="btn">戻る</button>
+        <button id="shutterBtn" class="btn primary">撮影する</button>
+      </div>
+      <p class="small">ドラッグで角度、ホイール・ピンチで寄る</p>
+    </div>
+  </section>
+  <section id="photoView" class="modal" hidden role="dialog" aria-label="撮影した写真">
+    <div class="modal-card photo-card">
+      <img id="photoImg" alt="撮影したオムライスの写真">
+      <div class="photo-actions">
+        <button id="photoClose" class="btn">閉じる</button>
+        <button id="saveBtn" class="btn primary">画像を保存</button>
+      </div>
+      <a id="xSharePhoto" class="btn x-share" href="https://x.com/intent/post" target="_blank" rel="noopener">𝕏 写真をXにのせる</a>
+      <p class="small" id="saveNote">保存できないときは、画像を長押し（PCは右クリック）して保存してください</p>
+    </div>
+  </section>
+
+  <!-- エラー -->
+  <section id="error" class="modal" hidden role="alertdialog">
+    <div class="modal-card">
+      <h2>表示できませんでした</h2>
+      <p id="errorMsg" style="white-space:pre-wrap;-webkit-user-select:text;user-select:text"></p>
+      <button class="btn primary" onclick="location.reload()">再読み込み</button>
+    </div>
+  </section>
+</div>
+
+<!-- Three.js r128（UMD 版。グローバル THREE を定義） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/gameState.js"></script>
+<script src="js/kitchen.js"></script>
+<script src="js/prep.js"></script>
+<script src="js/eggSimulation.js"></script>
+<script src="js/omelette.js"></script>
+<script src="js/panController.js"></script>
+<script src="js/plating.js"></script>
+<script src="js/knifeController.js"></script>
+<script src="js/sauceController.js"></script>
+<script src="js/scoring.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
